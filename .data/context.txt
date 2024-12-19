@@ -1,0 +1,125 @@
+\n===== ./resume.md =====
+It looks like you've shared a set of scripts for a project that seems to involve running a language model (like OpenAI's GPT-3 or similar) to process prompts and possibly manage data related to the context of these prompts. Let's break down what each script is responsible for:
+
+### `main.sh`
+This is the main script, but from the content you've shared, it doesn't contain any executable commands. Instead, it seems to be a placeholder or a reference to the structure of the scripts you have.
+
+### `context.sh`
+This script performs several actions:
+1. It defines an output file `context.txt` to store the context data.
+2. It creates the `.data` directory if it doesn't exist.
+3. It clears any existing content in `context.txt`.
+4. It iterates through all non-hidden files and subdirectories in the current working directory (CWD), appending their content to `context.txt` with a header for each file.
+5. It appends a representation of the file structure to `context.txt` using the `tree` command, excluding hidden directories.
+
+### `todo.md`
+This is a markdown file listing tasks that need to be completed for the project. The goals outlined are:
+1. Developing a web user interface (`-webUI`).
+2. Creating agents, with a particular focus on the `exec_agent` (`-agents`).
+3. Generating a context file in XML format (`make .data/context.xml`).
+
+### `run.sh`
+This script is used to run the language model with a given prompt and output the results to a file named `newfile.md`. Here's what it does:
+1. It sets the environment variable `MODEL` to point to a specific language model (`wizardlm2:7b`).
+2. It checks if an argument is passed to the script. If not, it prints a usage message and exits.
+3. It captures the provided prompt as `PROMPT` and constructs a command to run the language model with that prompt. The output is redirected to `newfile.md`.
+4. It executes the constructed command using `eval`.
+
+### File Structure
+The file structure you've listed shows:
+- A directory (`.`) containing:
+  - `context.sh`
+  - `main.sh`
+  - `run.sh`
+  - `todo.md`
+
+There are 1 directories and 4 files in total.
+
+### Notes and Suggestions
+- The `main.sh` script might do more than just define the structure; you may want to review or complete it based on the project's requirements.
+- In `context.sh`, consider using `find` with `-print0` and `xargs -0` for better performance when dealing with a large number of files.
+- The `run.sh` script assumes that `ollama` is the command to run the language model. Ensure that `ollama` is installed and properly configured in your environment.
+- The prompt passed to the language model should be carefully constructed to achieve the desired output.
+- The `FILENAME` in `run.sh` is hardcoded to `newfile.md`. You might want to make this a parameter or define it elsewhere for flexibility.
+- The `tree` command in `context.sh` will generate a text representation of the directory structure. If you need a different format, you can adjust the `tree` command options accordingly.
+
+If you're looking to enhance or expand the functionality of these scripts, you might consider adding error handling, logging, and possibly more sophisticated file management depending on the needs of your project.
+
+
+\n===== ./main.sh =====
+
+
+# main script
+
+\n===== ./context.sh =====
+#!/bin/bash
+
+# Define the output file
+OUTPUT_FILE=".data/context.txt"
+
+# Create the .data directory if it doesn't exist
+mkdir -p .data
+
+# Erase old context
+> "$OUTPUT_FILE"
+
+# Iterate through all non-hidden files and subdirectories in the CWD
+for file in $(find . -type f ! -path '*/.*'); do
+    # Append the file name as a header
+    echo "\n===== $file =====" >> "$OUTPUT_FILE"
+    # Append the content of the file
+    cat "$file" >> "$OUTPUT_FILE"
+    echo >> "$OUTPUT_FILE"  # Add a newline for separation
+done
+
+# Append the file structure using the tree command
+echo "\n===== FILE STRUCTURE =====" >> "$OUTPUT_FILE"
+tree -I '.*' . >> "$OUTPUT_FILE"
+
+\n===== ./prompt.txt =====
+
+
+
+prompt :
+{
+
+one liner explainning what is this.
+
+
+}
+
+\n===== ./todo.md =====
+
+
+### PROMPT-LIB GOALS:
+
+-webUI
+-agents(mainnly exec_agent)
+-make .data/context.xml
+
+
+
+\n===== ./run.sh =====
+#!/bin/bash
+
+MODEL="wizardlm2:7b"
+FILENAME="1newfile.md"
+CONTEXT_FILE=".data/context.txt"
+PROMPT="prompt.txt"
+
+
+CMD="ollama run $MODEL < $CONTEXT_FILE > $FILENAME"
+
+# Execute the command
+eval $CMD
+
+\n===== FILE STRUCTURE =====
+.
+├── context.sh
+├── main.sh
+├── prompt.txt
+├── resume.md
+├── run.sh
+└── todo.md
+
+1 directory, 6 files

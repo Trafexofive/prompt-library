@@ -1,17 +1,19 @@
 #!/bin/bash
 
+
 MODEL="wizardlm2:7b"
+FILENAME=".data/output.md"
+CONTEXT_FILE=".data/context.xml"
+PROMPT_FILE="prompt.txt"
+TEMP_FILE=".data/.temp/temp_input.txt" # Temporary file to combine context and prompt
 
-FILENAME="newfile.md"
+rm $TEMP_FILE
 
-# Check if an argument is passed
-if [ -z "$1" ]; then
-  echo "Usage: ./run.sh 'your_prompt_here'"
-  exit 1
-fi
+# Combine context and prompt into a temporary file
+cat $CONTEXT_FILE $PROMPT_FILE > $TEMP_FILE
 
-PROMPT="$1"
-CMD="ollama run $MODEL \"$PROMPT\" > $FILENAME"
+# Command to run the model
+CMD="ollama run $MODEL < $TEMP_FILE > $FILENAME"
 
 # Execute the command
 eval $CMD
