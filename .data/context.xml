@@ -1,8 +1,237 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <context>
-  <file>
-    <name>./resume.md</name>
-    <content><![CDATA[
+  <file name="main.sh">
+    <![CDATA[
+#!/bin/bash
+
+# Configuration
+DATA_DIR=".data"
+INPUT_FILE="${DATA_DIR}/output.md"
+CODE_DIR="${DATA_DIR}/code"
+LOG_FILE="${DATA_DIR}/extract.log"
+
+# Function to log messages with timestamps
+log_message() {
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] $1" | tee -a "$LOG_FILE"
+}
+
+# Function to ensure directories exist
+setup_directories() {
+    for dir in "$DATA_DIR" "$CODE_DIR"; do
+        if [ ! -d "$dir" ]; then
+            mkdir -p "$dir"
+            log_message "Created directory: $dir"
+        fi
+    done
+}
+
+# Main execution
+main() {
+    # Setup and checks
+    setup_directories
+    
+    if [ ! -f "$INPUT_FILE" ]; then
+        log_message "ERROR: Input file not found: $INPUT_FILE"
+        exit 1
+    fi
+    
+    # Clean previous extractions
+    rm -f "${CODE_DIR}"/*
+    log_message "Cleaned previous extractions"
+    
+    # Extract code blocks using awk
+    log_message "Starting code extraction from $INPUT_FILE"
+    
+    awk '
+    BEGIN {
+        block_num = 0
+        in_block = 0
+        current_content = ""
+    }
+    
+    # Detect start of code block
+    /^```/ {
+        if (!in_block) {
+            block_num++
+            in_block = 1
+            # Get language (remove ```), default to txt if none specified
+            lang = substr($0, 4)
+            gsub(/[[:space:]]+/, "", lang)
+            if (lang == "") lang = "txt"
+            # Create filename
+            filename = "./'"$CODE_DIR"'/code_" block_num "." lang
+            next
+        } else {
+            # End of block
+            in_block = 0
+            print current_content > filename
+            current_content = ""
+            next
+        }
+    }
+    
+    # Collect content when inside a code block
+    {
+        if (in_block) {
+            current_content = current_content $0 "\n"
+        }
+    }
+    
+    END {
+        print block_num  # Print total number of blocks
+    }
+    ' "$INPUT_FILE" > "${CODE_DIR}/.block_count"
+    
+    # Get the number of extracted blocks
+    TOTAL_BLOCKS=$(cat "${CODE_DIR}/.block_count")
+    rm "${CODE_DIR}/.block_count"
+    
+    if [ "$TOTAL_BLOCKS" -gt 0 ]; then
+        log_message "Successfully extracted $TOTAL_BLOCKS code blocks"
+        
+        # Create index file
+        {
+            echo "# Extracted Code Blocks"
+            echo "Extracted on: $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "Total blocks: $TOTAL_BLOCKS"
+            echo
+            echo "## Files"
+            for i in $(seq 1 "$TOTAL_BLOCKS"); do
+                file=$(ls "${CODE_DIR}/code_${i}."* 2>/dev/null)
+                if [ -n "$file" ]; then
+                    filename=$(basename "$file")
+                    echo "- [$filename]($filename)"
+                fi
+            done
+        } > "${CODE_DIR}/index.md"
+        
+        log_message "Created index file at ${CODE_DIR}/index.md"
+    else
+        log_message "No code blocks found in input file"
+        # Show file info for debugging
+        log_message "Input file size: $(wc -c < "$INPUT_FILE") bytes"
+        log_message "Input file lines: $(wc -l < "$INPUT_FILE") lines"
+        log_message "First few lines of input file:"
+        head -n 5 "$INPUT_FILE" | while IFS= read -r line; do
+            log_message "LINE: $line"
+        done
+    fi
+}
+
+# Trap for unexpected exits
+trap 'log_message "Script terminated"' EXIT
+
+# Execute main function
+main
+    ]]]>
+  </file>
+  <file name="output.md">
+    <![CDATA[
+It looks like you've provided an XML document that describes a set of scripts and their intended functionality within a project, possibly related to AI or data processing, given the references to "json_converter.sh" and "ollama run" (which might be referring to the OpenAI model LLaMA). The XML structure is used to define the context of each file and its purpose within the project. Let's break down what each part of the XML document describes:
+
+1. `main.sh`: This is the main script, which seems to be empty in the provided snippet. Its content is enclosed in CDATA tags, indicating that it contains scripts or commands written in Bash (as denoted by the shebang line `#!/bin/bash`).
+
+2. `prompt.txt`: This file contains a user prompt, which triggers the execution of the `json_converter.sh` script to convert an XML context file into a JSON format. The content is also enclosed in CDATA tags.
+
+3. `todo.md`: This Markdown file lists the goals and features for the PROMPT-LIB project. It includes ideas like developing a web UI, agents (with a focus on `exec_agent`), creating a `context.xml` file, adding RAGing capabilities (Rapid Agile Go-laling, a conversational AI technique), and linking from context to scraping data.
+
+4. `run.sh`: This script is responsible for running the AI model with the provided context and prompt. It sets up variables for the model (`MODEL`), the output file (`FILENAME`), the context file (`CONTEXT_FILE`), and a temporary file for combining context and prompt (`TEMP_FILE`). It then removes the temporary file, combines the context and prompt into it, runs the model command, and redirects the output to a markdown file (`FILENAME`).
+
+5. `json_converter.sh`: This script is intended to take an XML file (`CONTEXT_FILE`) and convert it into JSON format (`JSON_OUTPUT`). It starts by removing a temporary file (`temp.txt`), which will be used to store the compacted XML data.
+
+6. `file_structure`: This section seems to be intended for describing the directory structure of the project, but it is empty in the provided snippet.
+
+To implement the `json_converter.sh` as mentioned in the `prompt.txt` file, you would need to write a Bash script that reads the XML content from `context.xml`, extracts the necessary information, and writes it to a JSON format in `context.json`. There are several ways to convert XML to JSON in Bash, but one common approach is to use `jq` (a command-line JSON processor) after converting the XML to JSON format with tools like `xml2json`.
+
+Here's an example of how you might implement the `json_converter.sh` script using `xml2json` and `jq`:
+
+```bash
+#!/bin/bash
+
+CONTEXT_FILE=".data/context.xml"
+JSON_OUTPUT=".data/context/context.json"
+
+# Use xml2json to convert the XML to a JSON format
+xmllint --noout $CONTEXT_FILE | xml2json - > temp.txt
+
+# Convert the temporary file from xml2json's format to a standard JSON format using jq
+jq '.' temp.txt > $JSON_OUTPUT
+
+# Clean up the temporary file
+rm temp.txt
+```
+
+Please note that this script assumes `xml2json` is installed and that the XML structure can be directly converted to JSON by `xml2json`. The actual implementation might vary based on the specific XML schema used in `context.xml`.
+
+    ]]]>
+  </file>
+  <file name="model_run.log">
+    <![CDATA[
+[2024-12-19 14:21:43] Created directory: .data/.temp
+[2024-12-19 14:21:43] Starting model run with wizardlm2:7b
+[2024-12-19 14:21:43] Running model inference...
+[?25l⠋ [?25h[?25l[2K[1G⠹ [?25h[?25l[2K[1G⠸ [?25h[?25l[2K[1G⠼ [?25h[?25l[2K[1G⠼ [?25h[?25l[2K[1G⠦ [?25h[?25l[2K[1G⠧ [?25h[?25l[2K[1G⠇ [?25h[?25l[2K[1G⠏ [?25h[?25l[2K[1G⠏ [?25h[?25l[2K[1G⠋ [?25h[?25l[2K[1G⠹ [?25h[?25l[2K[1G⠸ [?25h[?25l[2K[1G⠸ [?25h[?25l[2K[1G⠴ [?25h[?25l[2K[1G⠦ [?25h[?25l[2K[1G⠦ [?25h[?25l[2K[1G⠧ [?25h[?25l[?25l[2K[1G[?25h[2K[1G[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[?25l[?25h[2024-12-19 14:22:25] Successfully generated output to: .data/output.md
+[2024-12-19 14:22:25] Output size: 36 lines
+[2024-12-19 14:22:25] Finished processing
+[2024-12-19 14:22:25] Script terminated
+    ]]]>
+  </file>
+  <file name="index.md">
+    <![CDATA[
+# Extracted Code Blocks
+Extracted on: 2024-12-19 14:53:31
+Total blocks: 1
+
+## Files
+- [code_1.bash](code_1.bash)
+    ]]]>
+  </file>
+  <file name="code_1.bash">
+    <![CDATA[
+#!/bin/bash
+
+CONTEXT_FILE=".data/context.xml"
+JSON_OUTPUT=".data/context/context.json"
+
+# Use xml2json to convert the XML to a JSON format
+xmllint --noout $CONTEXT_FILE | xml2json - > temp.txt
+
+# Convert the temporary file from xml2json's format to a standard JSON format using jq
+jq '.' temp.txt > $JSON_OUTPUT
+
+# Clean up the temporary file
+rm temp.txt
+
+    ]]]>
+  </file>
+  <file name="extract.log">
+    <![CDATA[
+[2024-12-19 14:47:06] Created directory: .data/code
+[2024-12-19 14:47:06] Cleaned previous extractions
+[2024-12-19 14:47:06] Starting code extraction from .data/output.md
+[2024-12-19 14:47:06] Extracted 0 code blocks
+[2024-12-19 14:47:06] No code blocks found in input file
+[2024-12-19 14:47:06] Script terminated
+[2024-12-19 14:48:34] Cleaned previous extractions
+[2024-12-19 14:48:34] Starting code extraction from .data/output.md
+[2024-12-19 14:48:34] Extracted 0 code blocks
+[2024-12-19 14:48:34] No code blocks found in input file
+[2024-12-19 14:48:34] Script terminated
+[2024-12-19 14:53:31] Cleaned previous extractions
+[2024-12-19 14:53:31] Starting code extraction from .data/output.md
+[2024-12-19 14:53:31] Successfully extracted 1 code blocks
+[2024-12-19 14:53:31] Created index file at .data/code/index.md
+[2024-12-19 14:53:31] Script terminated
+    ]]]>
+  </file>
+  <file name="context.json">
+    <![CDATA[
+    ]]]>
+  </file>
+  <file name="context.txt">
+    <![CDATA[
+\n===== ./resume.md =====
 It looks like you've shared a set of scripts for a project that seems to involve running a language model (like OpenAI's GPT-3 or similar) to process prompts and possibly manage data related to the context of these prompts. Let's break down what each script is responsible for:
 
 ### `main.sh`
@@ -49,97 +278,77 @@ There are 1 directories and 4 files in total.
 
 If you're looking to enhance or expand the functionality of these scripts, you might consider adding error handling, logging, and possibly more sophisticated file management depending on the needs of your project.
 
-    ]]></content>
-  </file>
-  <file>
-    <name>./main.sh</name>
-    <content><![CDATA[
+
+\n===== ./main.sh =====
 
 
 # main script
-    ]]></content>
-  </file>
-  <file>
-    <name>./prompt.txt</name>
-    <content><![CDATA[
+
+\n===== ./context.sh =====
+#!/bin/bash
+
+# Define the output file
+OUTPUT_FILE=".data/context.txt"
+
+# Create the .data directory if it doesn't exist
+mkdir -p .data
+
+# Erase old context
+> "$OUTPUT_FILE"
+
+# Iterate through all non-hidden files and subdirectories in the CWD
+for file in $(find . -type f ! -path '*/.*'); do
+    # Append the file name as a header
+    echo "\n===== $file =====" >> "$OUTPUT_FILE"
+    # Append the content of the file
+    cat "$file" >> "$OUTPUT_FILE"
+    echo >> "$OUTPUT_FILE"  # Add a newline for separation
+done
+
+# Append the file structure using the tree command
+echo "\n===== FILE STRUCTURE =====" >> "$OUTPUT_FILE"
+tree -I '.*' . >> "$OUTPUT_FILE"
+
+\n===== ./prompt.txt =====
 
 
 
-####### INFO : CONTEXT END
+prompt :
+{
 
-####### INFO : PROMPT SESSION START
+one liner explainning what is this.
 
-prompt {
-
-    EXCLUSIVELY OUTPUT : generate a small compacted json from context.
 
 }
-    ]]></content>
-  </file>
-  <file>
-    <name>./todo.md</name>
-    <content><![CDATA[
+
+\n===== ./todo.md =====
 
 
 ### PROMPT-LIB GOALS:
 
-## IDEAS
 -webUI
 -agents(mainnly exec_agent)
 -make .data/context.xml
--RAGing capabilities
--from context link to scrapping.
-
-## FEATURES
 
 
-    ]]></content>
-  </file>
-  <file>
-    <name>./run.sh</name>
-    <content><![CDATA[
+
+\n===== ./run.sh =====
 #!/bin/bash
 
 MODEL="wizardlm2:7b"
-FILENAME="active_memory.json"
-CONTEXT_FILE=".data/context.xml"
-PROMPT_FILE="prompt.txt"
-TEMP_FILE=".data/.temp/temp_input.txt" # Temporary file to combine context and prompt
+FILENAME="1newfile.md"
+CONTEXT_FILE=".data/context.txt"
+PROMPT="prompt.txt"
 
-# Combine context and prompt into a temporary file
-cat $CONTEXT_FILE $PROMPT_FILE > $TEMP_FILE
 
-# Command to run the model
-CMD="ollama run $MODEL < $TEMP_FILE > $FILENAME"
+CMD="ollama run $MODEL < $CONTEXT_FILE > $FILENAME"
 
 # Execute the command
 eval $CMD
 
-# Clean up temporary file
-rm $TEMP_FILE
-    ]]></content>
-  </file>
-  <file>
-    <name>./json_converter.sh</name>
-    <content><![CDATA[
-#!/bin/bash
-
-CONTEXT_FILE=".data/context.txt"
-JSON_OUTPUT=".data/context.json"
-
-# Extract headers and content from context file, skipping separator lines
-grep -v "===== FILE STRUCTURE =====|===== <FILE> =====" "$CONTEXT_FILE" > temp.txt
-
-# Use jq to compact the remaining content into JSON format
-cat temp.txt | jq '(. // {})' > "$JSON_OUTPUT"
-
-# Clean up temporary file
-rm temp.txt
-    ]]></content>
-  </file>
-  <file_structure>
+\n===== FILE STRUCTURE =====
 .
-├── json_converter.sh
+├── context.sh
 ├── main.sh
 ├── prompt.txt
 ├── resume.md
@@ -147,5 +356,208 @@ rm temp.txt
 └── todo.md
 
 1 directory, 6 files
-  </file_structure>
+    ]]]>
+  </file>
+  <file name="prompt.txt">
+    <![CDATA[
+
+
+
+
+
+user-prompt {
+
+    implement json_converter.sh 
+
+}
+    ]]]>
+  </file>
+  <file name="todo.md">
+    <![CDATA[
+
+
+### PROMPT-LIB GOALS:
+
+## IDEAS
+
+- webUI
+- agents(mainnly exec_agent)
+- make .data/context.xml
+- RAGing capabilities
+- from context link to scrapping.
+
+## FEATURES
+
+
+
+## TO-DO
+- add and handle auto-commit.sh
+- add and handle .data/.oldcontext.xml
+
+
+    ]]]>
+  </file>
+  <file name="run.sh">
+    <![CDATA[
+#!/bin/bash
+
+# Configuration
+MODEL="wizardlm2:7b"
+DATA_DIR=".data"
+TEMP_DIR="${DATA_DIR}/.temp"
+OUTPUT_FILE="${DATA_DIR}/output.md"
+CONTEXT_FILE="${DATA_DIR}/context.xml"
+PROMPT_FILE="prompt.txt"
+TEMP_INPUT="${TEMP_DIR}/temp_input.txt"
+LOG_FILE="${DATA_DIR}/model_run.log"
+
+# Function to log messages with timestamps
+log_message() {
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] $1" | tee -a "$LOG_FILE"
+}
+
+# Function to check if required files exist
+check_files() {
+    local missing_files=0
+    
+    for file in "$CONTEXT_FILE" "$PROMPT_FILE"; do
+        if [ ! -f "$file" ]; then
+            log_message "ERROR: Required file not found: $file"
+            missing_files=1
+        fi
+    done
+    
+    return $missing_files
+}
+
+# Function to ensure directories exist
+setup_directories() {
+    for dir in "$DATA_DIR" "$TEMP_DIR"; do
+        if [ ! -d "$dir" ]; then
+            mkdir -p "$dir"
+            log_message "Created directory: $dir"
+        fi
+    done
+}
+
+# Function to check if Ollama is installed and running
+check_ollama() {
+    if ! command -v ollama &> /dev/null; then
+        log_message "ERROR: Ollama is not installed"
+        return 1
+    fi
+    
+    # Basic check if Ollama service is responding
+    if ! ollama list &> /dev/null; then
+        log_message "ERROR: Ollama service is not running"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Main execution
+main() {
+    # Initialize logging
+    setup_directories
+    log_message "Starting model run with $MODEL"
+    
+    # Perform checks
+    check_ollama || exit 1
+    check_files || exit 1
+    
+    # Clean up any existing temporary files
+    [ -f "$TEMP_INPUT" ] && rm "$TEMP_INPUT"
+    
+    # Combine context and prompt
+    if ! cat "$CONTEXT_FILE" "$PROMPT_FILE" > "$TEMP_INPUT"; then
+        log_message "ERROR: Failed to combine input files"
+        exit 1
+    fi
+    
+    # Run the model
+    log_message "Running model inference..."
+    if ollama run "$MODEL" < "$TEMP_INPUT" > "$OUTPUT_FILE" 2>> "$LOG_FILE"; then
+        log_message "Successfully generated output to: $OUTPUT_FILE"
+        log_message "Output size: $(wc -l < "$OUTPUT_FILE") lines"
+    else
+        log_message "ERROR: Model execution failed"
+        exit 1
+    fi
+    
+    # Clean up
+    rm "$TEMP_INPUT"
+    log_message "Finished processing"
+}
+
+# Trap for cleanup on script exit
+trap 'rm -f "$TEMP_INPUT"; log_message "Script terminated"' EXIT
+
+# Execute main function
+main
+    ]]]>
+  </file>
+  <file name="json_converter.sh">
+    <![CDATA[
+#!/bin/bash
+
+CONTEXT_FILE=".data/context.xml"
+JSON_OUTPUT=".data/context/context.json"
+
+// take xml and compact it to json
+
+rm temp.txt
+    ]]]>
+  </file>
+  <file-structure>
+    .
+    ./.data
+    ./.data/archive
+    ./.data/code
+    ./.data/code/code_1.bash
+    ./.data/code/index.md
+    ./.data/context.json
+    ./.data/context.txt
+    ./.data/context.xml
+    ./.data/extract.log
+    ./.data/model_run.log
+    ./.data/output.md
+    ./.data/.temp
+    ./.git/config
+    ./.git/description
+    ./.git/HEAD
+    ./.git/hooks/applypatch-msg.sample
+    ./.git/hooks/commit-msg.sample
+    ./.git/hooks/fsmonitor-watchman.sample
+    ./.git/hooks/post-update.sample
+    ./.git/hooks/pre-applypatch.sample
+    ./.git/hooks/pre-commit.sample
+    ./.git/hooks/pre-merge-commit.sample
+    ./.git/hooks/prepare-commit-msg.sample
+    ./.git/hooks/pre-push.sample
+    ./.git/hooks/pre-rebase.sample
+    ./.git/hooks/pre-receive.sample
+    ./.git/hooks/push-to-checkout.sample
+    ./.git/hooks/sendemail-validate.sample
+    ./.git/hooks/update.sample
+    ./.git/index
+    ./.git/info/exclude
+    ./.git/logs/HEAD
+    ./.git/logs/refs/heads/main
+    ./.git/logs/refs/remotes/origin/HEAD
+    ./.git/objects/pack/pack-dbf6a20a0cd79703dc64986a37595d76e48d78a5.idx
+    ./.git/objects/pack/pack-dbf6a20a0cd79703dc64986a37595d76e48d78a5.pack
+    ./.git/objects/pack/pack-dbf6a20a0cd79703dc64986a37595d76e48d78a5.rev
+    ./.git/packed-refs
+    ./.git/refs/heads/main
+    ./.git/refs/remotes/origin/HEAD
+    ./json_converter.sh
+    ./main.sh
+    ./prompt.txt
+    ./run.sh
+    ./.scripts
+    ./.scripts/context.sh
+    ./todo.md
+  </file-structure>
 </context>

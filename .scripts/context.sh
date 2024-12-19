@@ -1,35 +1,83 @@
 #!/bin/bash
-
-# Define the output file and the working directory
-OUTPUT_FILE="../.data/context.xml"
-PWD_DIR=".."
+# Define the output file
+OUTPUT_FILE="./.data/context.xml"
 
 # Create the .data directory if it doesn't exist
+create_output_directory() {
 mkdir -p "$(dirname "$OUTPUT_FILE")"
+}
 
 # Erase old context
-> "$OUTPUT_FILE"
+erase_old_context() {
+    > "$OUTPUT_FILE"
+}
 
 # Start the XML structure
-echo '<?xml version="1.0" encoding="UTF-8"?>' >> "$OUTPUT_FILE"
-echo '<context>' >> "$OUTPUT_FILE"
+start_xml_structure() {
+    echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" >> "$OUTPUT_FILE"
+    echo "<context>" >> "$OUTPUT_FILE"
+}
 
-# Iterate through all non-hidden files and subdirectories in the specified PWD_DIR
-for file in $(find "$PWD_DIR" -type f ! -path "$PWD_DIR/.*" ! -name "prompt"); do
+# Add file content to the XML structure
+add_file_content_to_xml() {
+    local file="$1"
+    
+    # Skip the output file itself
+    if [ "$file" = "$OUTPUT_FILE" ]; then
+        return
+    fi
+    
     # Append the file name as a header
-    echo "  <file>" >> "$OUTPUT_FILE"
-    echo "    <name>${file#$PWD_DIR/}</name>" >> "$OUTPUT_FILE" # Remove the PWD_DIR prefix
-    echo "    <content><![CDATA[" >> "$OUTPUT_FILE"
+    echo "  <file name=\"$(basename "$file")\">" >> "$OUTPUT_FILE"
+    
     # Append the content of the file
+    echo "    <![CDATA[" >> "$OUTPUT_FILE"
     cat "$file" >> "$OUTPUT_FILE"
-    echo "    ]]></content>" >> "$OUTPUT_FILE"
+    echo "    ]]]>" >> "$OUTPUT_FILE"
+    
     echo "  </file>" >> "$OUTPUT_FILE"
-done
+}
 
-# Append the file structure using the tree command
-echo "  <file_structure>" >> "$OUTPUT_FILE"
-tree -I '.*' "$PWD_DIR" | sed 's/&/&amp;/g; s/</&lt;/g; s/>/&gt;/g' >> "$OUTPUT_FILE" # Escape special XML characters
-echo "  </file_structure>" >> "$OUTPUT_FILE"
+# Process files and add them to the XML
+process_files() {
+    find . -type f \
+        ! -path './.git*' \
+        ! -path './.scripts/context.sh' \
+        ! -name "$(basename "$OUTPUT_FILE")" \
+        ! -path "./node_modules/*" \
+        -print0 | while IFS= read -r -d '' file; do
+            add_file_content_to_xml "$file"
+        done
+}
+
+# Add the file structure to the XML
+add_file_structure_to_xml() {
+    echo "  <file-structure>" >> "$OUTPUT_FILE"
+    
+    find . -type f -o -type d \
+        ! -path './.git*' \
+        ! -path './.scripts/*' \
+        ! -path "./node_modules/*" \
+        ! -name "$(basename "$OUTPUT_FILE")" \
+        | sort | sed 's/^/    /' >> "$OUTPUT_FILE"
+    
+    echo "  </file-structure>" >> "$OUTPUT_FILE"
+}
 
 # Close the XML structure
-echo '</context>' >> "$OUTPUT_FILE"
+close_xml_structure() {
+    echo "</context>" >> "$OUTPUT_FILE"
+}
+
+# Main function to orchestrate the script
+main() {
+    create_output_directory
+    erase_old_context
+    start_xml_structure
+    process_files
+    add_file_structure_to_xml
+    close_xml_structure
+}
+
+# Run the script
+main
