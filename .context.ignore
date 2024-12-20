@@ -1,0 +1,11 @@
+
+.context.ignore
+.data/output.md
+prompt.txt
+.data/*.xml
+.data/*.log
+.git/*
+
+
+*.sh
+*.md

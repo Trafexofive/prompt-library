@@ -1,10 +1,1 @@
-
-
-
-
-
-user-prompt {
-
-what can you tell me about this.
-
-}
+what can you tell me about the goals of this repo.
